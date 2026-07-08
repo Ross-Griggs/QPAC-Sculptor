@@ -1,0 +1,38 @@
+name: Publish NuGet Package
+
+# Builds and publishes QPAC.Sculptor to GitHub Packages on every push.
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write   # required for the built-in GITHUB_TOKEN to push packages
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest   # core targets net7.0/netstandard2.0 — no Windows/WPF needed
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET SDKs
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            7.0.x
+            8.0.x
+
+      - name: Restore
+        run: dotnet restore "QPAC Sculptor/QPAC Sculptor.csproj"
+
+      # GeneratePackageOnBuild=true in the csproj, so the build produces the .nupkg.
+      # PackageOutputPath is overridden here so it lands in a known, repo-local folder.
+      - name: Build & pack
+        run: dotnet build "QPAC Sculptor/QPAC Sculptor.csproj" -c Release --no-restore -p:Version=1.0.${{ github.run_number }} -p:PackageOutputPath="${{ github.workspace }}/artifacts"
+
+      - name: Push to GitHub Packages
+        run: >
+          dotnet nuget push "${{ github.workspace }}/artifacts/*.nupkg"
+          --source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json"
+          --api-key ${{ secrets.GITHUB_TOKEN }}
+          --skip-duplicate
