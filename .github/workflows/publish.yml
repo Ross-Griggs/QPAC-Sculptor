@@ -30,9 +30,13 @@ jobs:
       - name: Build & pack
         run: dotnet build "QPAC Sculptor/QPAC Sculptor.csproj" -c Release --no-restore -p:Version=1.0.${{ github.run_number }} -p:PackageOutputPath="${{ github.workspace }}/artifacts"
 
+      # Publishes to the qpacsystems org feed. The repo lives under a personal account,
+      # so the built-in GITHUB_TOKEN can't write to the org — use a PAT with write:packages
+      # stored as the QPAC_PACKAGES_PAT repo secret. (If this repo is ever transferred into
+      # the qpacsystems org, you can switch the api-key back to secrets.GITHUB_TOKEN.)
       - name: Push to GitHub Packages
         run: >
           dotnet nuget push "${{ github.workspace }}/artifacts/*.nupkg"
-          --source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json"
-          --api-key ${{ secrets.GITHUB_TOKEN }}
+          --source "https://nuget.pkg.github.com/qpacsystems/index.json"
+          --api-key ${{ secrets.QPAC_PACKAGES_PAT }}
           --skip-duplicate
