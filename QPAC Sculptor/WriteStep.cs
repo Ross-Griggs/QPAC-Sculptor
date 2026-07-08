@@ -14,7 +14,7 @@ namespace QPAC.Sculptor
             (1, 0, 0), (-1, 0, 0),
             (0, 1, 0), (0, -1, 0),
             (0, 0, 1), (0, 0, -1),
-        };
+        }; 
         public static void WriteStep(string path, StepFile file, string productName)
         {
             var data = new StringBuilder();
