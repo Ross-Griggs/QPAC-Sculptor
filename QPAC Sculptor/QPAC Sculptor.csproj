@@ -1,0 +1,23 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+	 <TargetFrameworks>net7.0;netstandard2.0</TargetFrameworks>
+    <RootNamespace>QPAC.Sculptor</RootNamespace>
+    <ImplicitUsings>disable</ImplicitUsings>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <PackageOutputPath>$(USERPROFILE)\Documents\Nuget Package Output</PackageOutputPath>
+    <PackageId>QPAC.Sculptor</PackageId>
+    <VersionPrefix>1.0.0</VersionPrefix>
+    <Authors>Q-PAC</Authors>
+    <Company>Q-PAC</Company>
+  </PropertyGroup>
+  <Target Name="StampDynamicVersion" BeforeTargets="GenerateNuspec;GetPackageVersion">
+    <PropertyGroup>
+      <PackageVersion>$(VersionPrefix)-local.$([System.DateTime]::Now.ToString("yyyyMMddHHmmss"))</PackageVersion>
+    </PropertyGroup>
+  </Target>
+
+</Project>
