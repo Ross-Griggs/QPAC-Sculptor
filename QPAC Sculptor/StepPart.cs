@@ -1,8 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace QPAC.Sculptor
 {
@@ -82,8 +79,8 @@ namespace QPAC.Sculptor
     public class Cone : StepShape
     {
         public string Name;
-        public double Cx, Cy, Cz;           
-        public double Height;   
+        public double Cx, Cy, Cz;
+        public double Height;
         public double BottomRadius, TopRadius;
         public int Sides;
 

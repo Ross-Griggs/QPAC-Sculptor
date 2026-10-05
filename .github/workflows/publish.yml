@@ -1,13 +1,12 @@
 name: Publish NuGet Package
 
-# Builds and publishes QPAC.Sculptor to GitHub Packages on every push.
+# Builds and publishes QPAC.Sculptor to the public nuget.org gallery on every push.
 on:
   push:
   workflow_dispatch:
 
 permissions:
   contents: read
-  packages: write   # required for the built-in GITHUB_TOKEN to push packages
 
 jobs:
   publish:
@@ -30,13 +29,12 @@ jobs:
       - name: Build & pack
         run: dotnet build "QPAC Sculptor/QPAC Sculptor.csproj" -c Release --no-restore -p:Version=1.0.${{ github.run_number }} -p:PackageOutputPath="${{ github.workspace }}/artifacts"
 
-      # Publishes to the qpacsystems org feed. The repo lives under a personal account,
-      # so the built-in GITHUB_TOKEN can't write to the org — use a PAT with write:packages
-      # stored as the QPAC_PACKAGES_PAT repo secret. (If this repo is ever transferred into
-      # the qpacsystems org, you can switch the api-key back to secrets.GITHUB_TOKEN.)
-      - name: Push to GitHub Packages
+      # Publishes to the public nuget.org gallery. Create an API key at
+      # https://www.nuget.org/account/apikeys (scope: Push, glob QPAC.Sculptor*)
+      # and store it as the repo secret NUGET_API_KEY.
+      - name: Push to nuget.org
         run: >
           dotnet nuget push "${{ github.workspace }}/artifacts/*.nupkg"
-          --source "https://nuget.pkg.github.com/qpacsystems/index.json"
-          --api-key ${{ secrets.QPAC_PACKAGES_PAT }}
+          --source "https://api.nuget.org/v3/index.json"
+          --api-key ${{ secrets.NUGET_API_KEY }}
           --skip-duplicate

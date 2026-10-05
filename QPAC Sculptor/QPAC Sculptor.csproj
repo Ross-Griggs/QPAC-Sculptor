@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
 	 <TargetFrameworks>net7.0;netstandard2.0</TargetFrameworks>
@@ -12,8 +12,27 @@
     <PackageId>QPAC.Sculptor</PackageId>
     <!-- Base version. CI overrides the patch via -p:Version=1.0.<run_number>. -->
     <Version>1.0.0</Version>
+    <!-- Keep assembly IDENTITY stable across every 1.0.x build. AssemblyVersion defaults to
+         $(Version), so without this each CI run (1.0.1, 1.0.99…) produces a different assembly
+         identity, and a Wpf DLL compiled against one core version fails to bind to another at
+         RUNTIME (builds fine, throws on first call). FileVersion still tracks the real version. -->
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
     <Authors>Q-PAC</Authors>
     <Company>Q-PAC</Company>
+
+    <!-- Public listing metadata (nuget.org). -->
+    <Description>A lightweight .NET library for building 3D solid geometry in code and exporting it to STEP (ISO 10303-21) CAD files. Compose parts from primitive shapes, apply rigid transforms, and write STEP output consumable by any CAD package.</Description>
+    <PackageTags>STEP;CAD;3D;geometry;ISO-10303;solid-modeling;export</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageProjectUrl>https://github.com/Ross-Griggs/QPAC-Sculptor</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/Ross-Griggs/QPAC-Sculptor</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <Copyright>Copyright (c) 2026 Q-PAC</Copyright>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
 
 </Project>
