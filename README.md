@@ -16,6 +16,10 @@ package.
 Targets `net7.0` and `netstandard2.0`. The WPF preview lives in
 [`QPAC.Sculptor.Wpf`](https://github.com/Ross-Griggs/QPAC.Sculptor.Wpf).
 
+**New here? Read [Building STEP files from scratch](docs/QPAC.Sculptor-Walkthrough.pdf)**, a
+function-by-function walkthrough with a tested example and a rendered result for every function.
+It is generated from [`docs/walkthrough`](docs/walkthrough/README.md); rebuild it after API changes.
+
 ## Install
 
 The package is published to the private **qpacsystems** GitHub Packages feed. With that feed in

@@ -46,7 +46,7 @@ public static class Gallery
         x = Next();
         formed.Add(Sweep.Rod("Wire harness", new (double, double, double)[] { (x - 3, 0, 0.3), (x + 2, 0, 0.3), (x + 2, 2, 0.3), (x + 2, 2, 3) }, 0.2, bendRadius: 0.75));
         formed.Add(new Sweep("Handrail", Profiles.RoundedRectangle(0, 0, 0.6, 0.3, 0.1), new (double, double, double)[] { (x - 3, 5, 0), (x - 3, 5, 2), (x + 3, 5, 2), (x + 3, 5, 0) }, 0.5));
-        formed.Add(new Revolve("Inlet bell", (x, 12, 0), (0, 0, 1), new (double R, double Z)[] { (1.0, 0), (2.4, 0), (2.4, 0.15), (1.2, 0.15), (1.15, 1.5), (1.0, 1.5) }).FilletProfile(0.1, 4, 2, 3));
+        formed.Add(new Revolve("Inlet bell", (x, 12, 0), (0, 0, 1), new (double R, double Z)[] { (1.0, 0), (2.4, 0), (2.4, 0.15), (1.2, 0.15), (1.15, 1.5), (1.0, 1.5) }).FilletProfile(0.06, 4, 1, 2));
 
         var hvac = file.AddPart(new StepPart("Transitions", StepColor.Insulation));
         x = Next();

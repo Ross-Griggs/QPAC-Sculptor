@@ -364,3 +364,7 @@ FodyWeavers.xsd
 # Gallery sample output
 gallery-output/
 __pycache__/
+
+# Walkthrough PDF build output
+docs/walkthrough/out/
+docs/walkthrough/harness/Snippets.g.cs
