@@ -18,13 +18,18 @@ public class GeometryTests
     [InlineData(0)]
     [InlineData(1)]
     [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(4)]
     public void TriangulationCoversEveryFaceExactly(int which)
     {
         StepShape shape = which switch
         {
             0 => Extrusion.AlongZ("plate", 0, 1, Profiles.Channel(4, 2, 0.25, 0.25)),
             1 => Extrusion.AlongZ("perf", 0, 1, Profiles.Rectangle(0, 0, 10, 6)).AddHoleGrid(-4, -2, 5, 3, 2, 2, 0.4).AddSlotCut(-4, 2.6, 4, 2.6, 0.3),
-            _ => Extrusion.AlongZ("tray", 0, 2, Profiles.RoundedRectangle(0, 0, 10, 6, 1)).Shell(0.25, 0.5).AddCircularCut(2, 0, 0.5).AddCircularCut(-2, 0, 0.5),
+            2 => Extrusion.AlongZ("tray", 0, 2, Profiles.RoundedRectangle(0, 0, 10, 6, 1)).Shell(0.25, 0.5).AddCircularCut(2, 0, 0.5).AddCircularCut(-2, 0, 0.5),
+            // Rectangular holes on a grid share coordinates: bridges must not run through other holes' corners.
+            3 => Extrusion.AlongZ("ribbed", 0, 1, Profiles.Rectangle(0, 0, 12, 8)).AddPocketGrid(0.25, 0.125, 0.125, 4, 3, openFront: false),
+            _ => Extrusion.AlongZ("louvres", 0, 0.1, Profiles.Rectangle(0, 0, 20, 12)).AddHoleGrid(-8, -4, 9, 5, 2, 2, 0.5, 4),
         };
         var p = shape.ToPolyhedron();
         foreach (var f in p.Faces)
@@ -38,6 +43,43 @@ public class GeometryTests
     }
 
     private static double Dot((double X, double Y, double Z) a, (double X, double Y, double Z) b) => a.X * b.X + a.Y * b.Y + a.Z * b.Z;
+
+    [Fact]
+    public void TriangulationSurvivesManyHoleLayouts()
+    {
+        var shapes = new List<StepShape>();
+        for (int cols = 1; cols <= 6; cols++)
+            for (int rows = 1; rows <= 4; rows++)
+                shapes.Add(Extrusion.AlongZ("grid", 0, 1, Profiles.Rectangle(0, 0, 12, 8)).AddPocketGrid(0.25, 0.1, 0.2, cols, rows));
+
+        var staggered = Extrusion.AlongZ("staggered", 0, 0.1, Profiles.Rectangle(0, 0, 20, 12));
+        for (int r = 0; r < 4; r++)
+            for (int c = 0; c < 6; c++)
+                staggered.AddRectangularCut(-7.5 + c * 3 + (r % 2) * 1.5, -4.5 + r * 3, 1, 1);
+        shapes.Add(staggered);
+
+        var mixed = new Extrusion("mixed", (0, 0, 0), (1, 0, 0), (0, 0, 1), 0.1).SetProfile(Profiles.RoundedRectangle(0, 0, 20, 12, 2));
+        for (int c = 0; c < 5; c++)
+        {
+            mixed.AddRectangularCut(-8 + c * 4, 3, 2, 2);
+            mixed.AddCircularCut(-8 + c * 4, -3, 1, 6 + c);
+            mixed.AddSlotCut(-9 + c * 4, 0, -7 + c * 4, 0, 0.6);
+        }
+        shapes.Add(mixed.RotateAbout((0, 0, 0), (1, 1, 1), 33));
+
+        foreach (var shape in shapes)
+        {
+            var p = shape.ToPolyhedron();
+            foreach (var f in p.Faces)
+            {
+                var n = p.FaceNormal(f);
+                double faceArea = f.Loops.Sum(l => 0.5 * Dot(p.LoopNormal(l), n));
+                var tris = Tessellator.Triangulate(p, f);
+                Assert.All(tris, t => Assert.True(TriangleArea(p, t, n) > -1e-12, $"{shape.ShapeName}: triangle wound backwards"));
+                Assert.Equal(faceArea, tris.Sum(t => TriangleArea(p, t, n)), 8);
+            }
+        }
+    }
 
     [Fact]
     public void TransformInverseAndComposition()

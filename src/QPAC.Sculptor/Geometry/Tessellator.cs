@@ -52,7 +52,7 @@ namespace QPAC.Sculptor
                 foreach (int k in candidates)
                 {
                     var pk = P(ring[k]);
-                    if (BridgeClear(pm, pk, ring, hole, others, P)) { best = k; break; }
+                    if (LocallyInside(ring, k, pm, P) && BridgeClear(pm, pk, ring, hole, others, P)) { best = k; break; }
                 }
                 if (best < 0) best = candidates[0];
 
@@ -65,14 +65,44 @@ namespace QPAC.Sculptor
             return ring;
         }
 
+        // Once holes are spliced in, one point can appear several times in the ring. The bridge must
+        // attach at the occurrence whose interior wedge (ring is counter-clockwise) contains the
+        // direction toward the hole, or the spliced polygon crosses itself.
+        private static bool LocallyInside(List<int> ring, int k, (double U, double V) target, Func<int, (double U, double V)> P)
+        {
+            int n = ring.Count;
+            var p = P(ring[k]);
+            var a = P(ring[(k - 1 + n) % n]);
+            var b = P(ring[(k + 1) % n]);
+            double Cross((double U, double V) o, (double U, double V) x, (double U, double V) y)
+                => (x.U - o.U) * (y.V - o.V) - (x.V - o.V) * (y.U - o.U);
+            if (Cross(a, p, b) >= 0)
+                return Cross(p, b, target) >= 0 && Cross(p, target, a) >= 0;
+            return !(Cross(p, a, target) > 0 && Cross(p, target, b) > 0);
+        }
+
         private static bool BridgeClear((double U, double V) a, (double U, double V) b, List<int> ring, List<int> hole, List<List<int>> others, Func<int, (double U, double V)> P)
         {
+            double du = b.U - a.U, dv = b.V - a.V, len2 = du * du + dv * dv;
+            double tol = 1e-9 * Math.Max(1.0, Math.Sqrt(len2));
+
+            // Holes laid out on a grid share coordinates, so a bridge can run exactly through another
+            // loop's corner without properly crossing an edge; that splices an invalid polygon.
+            bool Grazes((double U, double V) q)
+            {
+                if (Dist2(q, a) <= tol * tol || Dist2(q, b) <= tol * tol) return false;
+                double t = ((q.U - a.U) * du + (q.V - a.V) * dv) / len2;
+                if (t <= 0 || t >= 1) return false;
+                double ex = a.U + t * du - q.U, ey = a.V + t * dv - q.V;
+                return ex * ex + ey * ey <= tol * tol;
+            }
+
             bool Hits(IList<int> loop)
             {
                 for (int i = 0; i < loop.Count; i++)
                 {
                     var c = P(loop[i]); var d = P(loop[(i + 1) % loop.Count]);
-                    if (Polygon2D.SegmentsCross(a, b, c, d)) return true;
+                    if (Polygon2D.SegmentsCross(a, b, c, d) || Grazes(c)) return true;
                 }
                 return false;
             }
@@ -102,10 +132,13 @@ namespace QPAC.Sculptor
                 => (a.U - o.U) * (b.V - o.V) - (a.V - o.V) * (b.U - o.U);
 
             int guard = 0;
+            bool relaxed = false;
             while (idx.Count > 3 && guard++ < 100000)
             {
                 bool clipped = false;
                 int count = idx.Count;
+                // First pass rejects ears with any vertex on their boundary. Grid-aligned holes put
+                // vertices exactly on many diagonals, so if nothing clips, only block on strictly-inside points.
                 for (int i = 0; i < count; i++)
                 {
                     int ip = (i - 1 + count) % count, inx = (i + 1) % count;
@@ -129,14 +162,22 @@ namespace QPAC.Sculptor
                         if (k == ip || k == i || k == inx) continue;
                         if (idx[k] == idx[ip] || idx[k] == idx[i] || idx[k] == idx[inx]) continue;
                         var p = pts[k];
-                        if (Cross(a, b, p) >= 0 && Cross(b, c, p) >= 0 && Cross(c, a, p) >= 0) contains = true;
+                        double thr = relaxed ? 1e-9 * cr : 0;
+                        bool In(double x) => relaxed ? x > thr : x >= 0;
+                        if (In(Cross(a, b, p)) && In(Cross(b, c, p)) && In(Cross(c, a, p))) contains = true;
                     }
                     if (contains) continue;
 
                     tris.Add((idx[ip], idx[i], idx[inx]));
                     idx.RemoveAt(i); pts.RemoveAt(i);
                     clipped = true;
+                    relaxed = false;
                     break;
+                }
+                if (!clipped && !relaxed)
+                {
+                    relaxed = true;
+                    continue;
                 }
                 if (!clipped)
                 {
