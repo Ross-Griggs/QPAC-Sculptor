@@ -35,7 +35,6 @@
 
   <ItemGroup>
     <None Include="..\..\README.md" Pack="true" PackagePath="\" />
-    <InternalsVisibleTo Include="QPAC.Sculptor.Tests" />
   </ItemGroup>
 
 </Project>

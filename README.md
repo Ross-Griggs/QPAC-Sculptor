@@ -165,16 +165,14 @@ src/QPAC.Sculptor/          the library
   Shapes/                   every shape + EdgeFinish
   Geometry/                 Transform, Polyhedron, Profiles, Tessellator (+ internal helpers)
   Export/                   Step (public entry point), StepWriter, StepWriteOptions
-tests/QPAC.Sculptor.Tests/  xUnit tests (volumes, manifold checks, STEP output)
 samples/QPAC.Sculptor.Gallery/  writes a STEP file with one of everything
-tools/validate-step.py      checks a STEP file with OpenCascade (pip install cadquery-ocp)
+docs/                       walkthrough PDF and the scripts that generate it
 ```
 
-Try the gallery and check its output:
+Try the gallery:
 
 ```
 dotnet run --project samples/QPAC.Sculptor.Gallery -- out
-python tools/validate-step.py out/gallery.step
 ```
 
 ## Releasing
