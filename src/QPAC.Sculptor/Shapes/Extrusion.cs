@@ -339,7 +339,7 @@ namespace QPAC.Sculptor
                 throw new ArgumentException($"{Name}: edge finishes ({fs:G4} + {bs:G4}) are deeper than the extrusion ({depth:G4}).");
 
             var rings = new List<(double T, double Inset)>(front);
-            foreach (var s in back.Reverse())
+            foreach (var s in Enumerable.Reverse(back))
             {
                 var r = (T: depth - s.T, s.Inset);
                 if (Math.Abs(r.T - rings[rings.Count - 1].T) < 1e-12 && Math.Abs(r.Inset - rings[rings.Count - 1].Inset) < 1e-12) continue;
