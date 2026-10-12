@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net7.0;netstandard2.0</TargetFrameworks>
+    <RootNamespace>QPAC.Sculptor</RootNamespace>
+    <!-- Published consumers bind to an assembly literally named "QPAC Sculptor"; renaming it breaks them at runtime. -->
+    <AssemblyName>QPAC Sculptor</AssemblyName>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591;NETSDK1138</NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <GeneratePackageOnBuild Condition="'$(Configuration)' == 'Release'">true</GeneratePackageOnBuild>
+    <PackageOutputPath>$(USERPROFILE)\Documents\Nuget Package Output</PackageOutputPath>
+    <PackageId>QPAC.Sculptor</PackageId>
+    <!-- Bump this to release. CI publishes exactly this version and skips it if it already exists. -->
+    <Version>1.1.0</Version>
+    <!-- Keep assembly identity stable across every 1.x package: AssemblyVersion otherwise follows
+         $(Version), and a consumer compiled against one core version then fails to bind to another
+         at runtime (builds fine, throws FileNotFoundException on first call). -->
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <Authors>Q-PAC</Authors>
+    <Company>Q-PAC</Company>
+    <Description>A lightweight .NET library for building 3D solid geometry in code and exporting it to STEP (ISO 10303-21) CAD files. Boxes, cylinders, cones, spheres, tori, tubes, revolves, sweeps, lofts and profile extrusions with cuts, pockets, shells, fillets, chamfers and draft; colours, instancing and inch/metric units.</Description>
+    <PackageTags>STEP;CAD;3D;geometry;ISO-10303;solid-modeling;export;extrusion;fillet</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageProjectUrl>https://github.com/Ross-Griggs/QPAC-Sculptor</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/Ross-Griggs/QPAC-Sculptor</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <Copyright>Copyright (c) 2026 Q-PAC</Copyright>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+    <InternalsVisibleTo Include="QPAC.Sculptor.Tests" />
+  </ItemGroup>
+
+</Project>
