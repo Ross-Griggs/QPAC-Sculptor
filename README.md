@@ -11,6 +11,8 @@ package.
 - Profiles: rectangles, rounded rectangles, circles, ellipses, polygons, slots, arcs, and
   sheet-metal sections (channel, angle, Z) with bend radii; fillet / chamfer / offset any profile.
 - Transforms: rotate, translate, mirror, place; instance one part many times.
+- Exact round geometry in the STEP file: holes, bends, rods and lathe parts are written as true
+  cylinders, cones, spheres and tori bounded by circular edges, not as flat facets.
 - Colours, inch or metric output, and validation with readable error messages.
 
 Targets `net7.0` and `netstandard2.0`. The WPF preview lives in
@@ -26,7 +28,7 @@ The package is published to the private **qpacsystems** GitHub Packages feed. Wi
 your NuGet sources (`QPACSource` on Q-PAC machines):
 
 ```
-dotnet add package QPAC.Sculptor --version 1.1.0
+dotnet add package QPAC.Sculptor --version 1.2.0
 ```
 
 ## Quick start
@@ -126,6 +128,34 @@ the operations `Fillet`, `FilletCorners`, `Chamfer`, `Offset`, `Translate`, `Rot
 var rail = new Extrusion("Rail", (0, 0, 0), (0, 1, 0), (0, 0, 1), 48)
     .SetProfile(Profiles.Channel(width: 3, flangeHeight: 1.5, thickness: 0.0625, insideBendRadius: 0.0625));
 ```
+
+## Exact curves
+
+Every shape is built as a polyhedron of flat facets. The preview draws those, and volumes and
+bounds are measured on them. The STEP writer also knows which facets stand for a true curved
+surface. It writes each such group as one exact face, so CAD and FEA tools see a real 0.25" hole
+rather than a 12-sided one. The facet count only changes the preview, not the export.
+
+| Built with | Written as |
+|---|---|
+| Arcs in an extrusion profile: `Circle`, `Slot`, `Arc`, rounded corners, `Fillet`, sheet-metal bends | Cylinders, with circular edges on the caps |
+| `Revolve`, `Cylinder`, `Cone`, `Sphere`, `Torus`, `Tube`, `.FilletProfile` | Cylinders, cones, spheres, tori and flat rings |
+| `Sweep` with a `bendRadius` | Cylinders on straight runs, tori (or cones) round the bends |
+
+An arc is recognised in a profile when at least 3 equal segments step at most 45° each around one
+circle. That covers every circle with 8 or more sides. A `RegularPolygon` with 8 or more sides is
+therefore written as a circle; hexagons stay hexagons.
+
+These stay faceted, but are still valid solids:
+- extrusions with `FilletEdges`, `ChamferEdges` or `WithDraft`;
+- `Rectangle.WithFillet`;
+- `Loft`, `Ellipse`;
+- sweeps with sharp (unrounded) corners;
+- anything stretched by a non-uniform transform.
+
+If a group of facets can't be written as one face that agrees with all its neighbours, it falls
+back to facets on its own. To write facets everywhere (the 1.1 output), pass
+`new StepWriteOptions { ExactCurves = false }`.
 
 ## Parts, colours and instances
 

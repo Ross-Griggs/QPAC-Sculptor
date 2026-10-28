@@ -16,7 +16,7 @@
     <PackageOutputPath>$(USERPROFILE)\Documents\Nuget Package Output</PackageOutputPath>
     <PackageId>QPAC.Sculptor</PackageId>
     <!-- Bump this to release. CI publishes exactly this version and skips it if it already exists. -->
-    <Version>1.1.1</Version>
+    <Version>1.2.0</Version>
     <!-- Keep assembly identity stable across every 1.x package: AssemblyVersion otherwise follows
          $(Version), and a consumer compiled against one core version then fails to bind to another
          at runtime (builds fine, throws FileNotFoundException on first call). -->

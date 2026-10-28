@@ -162,8 +162,9 @@ namespace QPAC.Sculptor
         {
             if (centerline.Count < 2) throw new ArgumentException("Centreline needs at least two points.", nameof(centerline));
             if (thickness <= 0) throw new ArgumentException("Thickness must be positive.", nameof(thickness));
+            var bendCenters = new List<(double U, double V)?>();
             var path = insideBendRadius > 0
-                ? FilletOpen(centerline, insideBendRadius + thickness / 2, bendSegments)
+                ? FilletOpen(centerline, insideBendRadius + thickness / 2, bendSegments, bendCenters)
                 : centerline.ToList();
 
             var left = new List<(double U, double V)>();
@@ -173,7 +174,14 @@ namespace QPAC.Sculptor
             for (int i = 0; i < n; i++)
             {
                 (double U, double V) nrm;
-                if (i == 0) nrm = LeftNormal(path[0], path[1]);
+                if (i < bendCenters.Count && bendCenters[i] is (double U, double V) c)
+                {
+                    // On a bend the faces are exact concentric arcs: offset along the radius, not a mitre.
+                    var radial = Polygon2D.Unit((path[i].U - c.U, path[i].V - c.V));
+                    var along = i + 1 < n ? LeftNormal(path[i], path[i + 1]) : LeftNormal(path[i - 1], path[i]);
+                    nrm = radial.U * along.U + radial.V * along.V >= 0 ? radial : (-radial.U, -radial.V);
+                }
+                else if (i == 0) nrm = LeftNormal(path[0], path[1]);
                 else if (i == n - 1) nrm = LeftNormal(path[n - 2], path[n - 1]);
                 else
                 {
@@ -211,7 +219,7 @@ namespace QPAC.Sculptor
             for (int i = 0; i < n; i++)
             {
                 if (!set.Contains(i) || radius <= 0) { r.Add(loop[i]); continue; }
-                r.AddRange(CornerArc(loop[(i - 1 + n) % n], loop[i], loop[(i + 1) % n], radius, segmentsPerCorner, closedLimit: true));
+                r.AddRange(CornerArc(loop[(i - 1 + n) % n], loop[i], loop[(i + 1) % n], radius, segmentsPerCorner, closedLimit: true, out _));
             }
             return Polygon2D.Clean(r);
         }
@@ -265,22 +273,35 @@ namespace QPAC.Sculptor
 
         public static double Area(IReadOnlyList<(double U, double V)> loop) => Math.Abs(Polygon2D.SignedArea(loop));
 
-        internal static List<(double U, double V)> FilletOpen(IReadOnlyList<(double U, double V)> path, double radius, int segments)
+        // centers, if given, receives each returned point's bend centre (null on straight runs).
+        internal static List<(double U, double V)> FilletOpen(IReadOnlyList<(double U, double V)> path, double radius, int segments, List<(double U, double V)?> centers = null)
         {
             var r = new List<(double U, double V)> { path[0] };
+            var cs = new List<(double U, double V)?> { null };
             for (int i = 1; i < path.Count - 1; i++)
-                r.AddRange(CornerArc(path[i - 1], path[i], path[i + 1], radius, segments, closedLimit: false));
-            r.Add(path[path.Count - 1]);
-            return Polygon2D.Clean(r);
+            {
+                var arc = CornerArc(path[i - 1], path[i], path[i + 1], radius, segments, closedLimit: false, out var center);
+                foreach (var p in arc)
+                {
+                    // Neighbouring bends can share a tangent point; keep one copy, as Clean would.
+                    if (Polygon2D.Dist(r[r.Count - 1], p) <= 1e-12) { cs[cs.Count - 1] = cs[cs.Count - 1] ?? center; continue; }
+                    r.Add(p);
+                    cs.Add(center);
+                }
+            }
+            if (Polygon2D.Dist(r[r.Count - 1], path[path.Count - 1]) > 1e-12) { r.Add(path[path.Count - 1]); cs.Add(null); }
+            if (centers != null) centers.AddRange(cs);
+            return r;
         }
 
-        private static IEnumerable<(double U, double V)> CornerArc((double U, double V) a, (double U, double V) b, (double U, double V) c, double radius, int segments, bool closedLimit)
+        private static List<(double U, double V)> CornerArc((double U, double V) a, (double U, double V) b, (double U, double V) c, double radius, int segments, bool closedLimit, out (double U, double V)? center)
         {
+            center = null;
             var e1 = Polygon2D.Unit((a.U - b.U, a.V - b.V));
             var e2 = Polygon2D.Unit((c.U - b.U, c.V - b.V));
             double cos = Math.Max(-1, Math.Min(1, e1.U * e2.U + e1.V * e2.V));
             double theta = Math.Acos(cos);
-            if (theta < 1e-6 || Math.PI - theta < 1e-6) { yield return b; yield break; }
+            if (theta < 1e-6 || Math.PI - theta < 1e-6) return new List<(double U, double V)> { b };
 
             double tangent = radius / Math.Tan(theta / 2);
             // Never eat more than half of either neighbouring edge on a closed loop (the next corner needs the rest).
@@ -292,19 +313,22 @@ namespace QPAC.Sculptor
             var t2 = (b.U + e2.U * tangent, b.V + e2.V * tangent);
             var bis = Polygon2D.Unit((e1.U + e2.U, e1.V + e2.V));
             double cd = r / Math.Sin(theta / 2);
-            var center = (b.U + bis.U * cd, b.V + bis.V * cd);
+            var o = (U: b.U + bis.U * cd, V: b.V + bis.V * cd);
+            center = o;
 
-            double a0 = Math.Atan2(t1.Item2 - center.Item2, t1.Item1 - center.Item1);
-            double a1 = Math.Atan2(t2.Item2 - center.Item2, t2.Item1 - center.Item1);
+            double a0 = Math.Atan2(t1.Item2 - o.V, t1.Item1 - o.U);
+            double a1 = Math.Atan2(t2.Item2 - o.V, t2.Item1 - o.U);
             double sweep = a1 - a0;
             while (sweep > Math.PI) sweep -= 2 * Math.PI;
             while (sweep < -Math.PI) sweep += 2 * Math.PI;
             int k = Math.Max(1, segments);
+            var points = new List<(double U, double V)>(k + 1);
             for (int i = 0; i <= k; i++)
             {
                 double ang = a0 + sweep * i / k;
-                yield return (center.Item1 + r * Math.Cos(ang), center.Item2 + r * Math.Sin(ang));
+                points.Add((o.U + r * Math.Cos(ang), o.V + r * Math.Sin(ang)));
             }
+            return points;
         }
     }
 }

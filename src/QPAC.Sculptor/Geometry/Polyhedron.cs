@@ -14,6 +14,9 @@ namespace QPAC.Sculptor
         public int[] Outer;
         public List<int[]> Holes = new List<int[]>();
 
+        /// <summary>The exact curved surface this facet approximates; facets sharing one become one STEP face. Null = flat.</summary>
+        internal AnalyticSurface Surface;
+
         public PolyFace(int[] outer, IEnumerable<int[]> holes = null)
         {
             Outer = outer;
@@ -45,6 +48,9 @@ namespace QPAC.Sculptor
         public List<(double X, double Y, double Z)> Vertices = new List<(double X, double Y, double Z)>();
         public List<PolyFace> Faces = new List<PolyFace>();
 
+        /// <summary>Vertex chains that lie on exact circles; the STEP writer emits them as arcs.</summary>
+        internal List<CurveRun> Curves = new List<CurveRun>();
+
         public int AddVertex((double X, double Y, double Z) p)
         {
             Vertices.Add(p);
@@ -62,7 +68,8 @@ namespace QPAC.Sculptor
         {
             var p = new Polyhedron { Vertices = new List<(double X, double Y, double Z)>(Vertices) };
             foreach (var f in Faces)
-                p.Faces.Add(new PolyFace((int[])f.Outer.Clone(), f.Holes.Select(h => (int[])h.Clone())));
+                p.Faces.Add(new PolyFace((int[])f.Outer.Clone(), f.Holes.Select(h => (int[])h.Clone())) { Surface = f.Surface });
+            foreach (var c in Curves) p.Curves.Add(new CurveRun((int[])c.Chain.Clone(), c.Curve));
             return p;
         }
 
@@ -72,6 +79,22 @@ namespace QPAC.Sculptor
             if (xf.IsIdentity) return p;
             for (int i = 0; i < p.Vertices.Count; i++) p.Vertices[i] = xf.Apply(p.Vertices[i]);
             if (xf.Determinant < 0) foreach (var f in p.Faces) f.Reverse();
+
+            if (!xf.IsSimilarity(out double scale))
+            {
+                // A stretch turns circles into ellipses; the facets stay right but the exact shapes no longer apply.
+                foreach (var f in p.Faces) f.Surface = null;
+                p.Curves.Clear();
+                return p;
+            }
+            var moved = new Dictionary<AnalyticSurface, AnalyticSurface>();
+            foreach (var f in p.Faces)
+            {
+                if (f.Surface == null) continue;
+                if (!moved.TryGetValue(f.Surface, out var s)) moved[f.Surface] = s = f.Surface.Transformed(xf, scale);
+                f.Surface = s;
+            }
+            p.Curves = p.Curves.Select(c => new CurveRun(c.Chain, c.Curve.Transformed(xf, scale))).ToList();
             return p;
         }
 
@@ -180,7 +203,14 @@ namespace QPAC.Sculptor
                 var outer = Clean(f.Outer);
                 if (outer.Length < 3) continue;
                 var holes = f.Holes.Select(Clean).Where(h => h.Length >= 3);
-                result.Faces.Add(new PolyFace(outer, holes));
+                result.Faces.Add(new PolyFace(outer, holes) { Surface = f.Surface });
+            }
+            foreach (var c in Curves)
+            {
+                var chain = new List<int>(c.Chain.Length);
+                foreach (int v in c.Chain)
+                    if (chain.Count == 0 || chain[chain.Count - 1] != map[v]) chain.Add(map[v]);
+                if (chain.Count >= 2) result.Curves.Add(new CurveRun(chain.ToArray(), c.Curve));
             }
             return result;
         }
@@ -282,6 +312,7 @@ namespace QPAC.Sculptor
 
             bool SamePlane(int a, int b)
             {
+                if (Faces[a].Surface != null || Faces[b].Surface != null) return false;
                 if (Vec.Dot(normals[a], normals[b]) < 1 - 1e-12) return false;
                 var p = Vertices[Faces[a].Outer[0]];
                 return Faces[b].Outer.All(v => Math.Abs(Vec.Dot(Vec.Sub(Vertices[v], p), normals[a])) < 1e-9 * size);

@@ -57,6 +57,24 @@ namespace QPAC.Sculptor
         }
 
         /// <summary>
+        /// True when the transform keeps shapes (rotation, mirror, uniform scale, translation);
+        /// <paramref name="scale"/> is then the factor it multiplies lengths by.
+        /// </summary>
+        public bool IsSimilarity(out double scale)
+        {
+            double sx = M11 * M11 + M21 * M21 + M31 * M31;
+            double sy = M12 * M12 + M22 * M22 + M32 * M32;
+            double sz = M13 * M13 + M23 * M23 + M33 * M33;
+            scale = Math.Sqrt(sx);
+            double tol = 1e-9 * Math.Max(1, sx);
+            return sx > 1e-24
+                && Math.Abs(sy - sx) < tol && Math.Abs(sz - sx) < tol
+                && Math.Abs(M11 * M12 + M21 * M22 + M31 * M32) < tol
+                && Math.Abs(M11 * M13 + M21 * M23 + M31 * M33) < tol
+                && Math.Abs(M12 * M13 + M22 * M23 + M32 * M33) < tol;
+        }
+
+        /// <summary>
         /// Rotation by <paramref name="degrees"/> (right-hand rule) around the axis line
         /// through <paramref name="point"/> pointing along <paramref name="axis"/>.
         /// A zero-length axis yields <see cref="Identity"/>.

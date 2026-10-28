@@ -143,8 +143,9 @@ section("Part 1 - From an empty project to a STEP file", [
 section("Part 2 - Primitive shapes", [
     "Primitives are solids defined by a few numbers. Every shape also accepts the transform "
     "methods in Part 6 and WithColor(...).",
-    "Curved surfaces are made of flat facets. The sides / segments parameters control how many "
-    "there are: more facets look smoother but make bigger files.",
+    "The preview draws curved surfaces as flat facets, and the sides / segments parameters set how "
+    "many. The STEP file writes true cylinders, cones, spheres and tori whatever the count, so the "
+    "count only changes how the preview looks.",
 ], [
     {"id": "box", "kind": "model", "title": "Rectangle - a box",
      "what": "A box given by its centre and its full size along X, Y and Z.",
@@ -876,7 +877,8 @@ TROUBLESHOOTING = [
      "to see every problem at once."),
     ("CAD shows the model 25.4 times too big or too small", "StepFile.Units doesn't match the unit you drew in. Set "
      "Units to your drawing unit; use ExportUnits to convert."),
-    ("Holes look like polygons in CAD", "Curves are faceted. Raise sides on cuts and cylinders."),
+    ("Holes look like polygons in CAD", "A circle needs at least 8 sides to be recognised as a circle, and the "
+     "shape must have no FilletEdges, ChamferEdges or draft. Otherwise it is written faceted."),
     ("Shapes added after part.RotateAbout(...) didn't move", "Part transforms apply only to shapes already in the "
      "part (Part 6)."),
     ("A tray comes out upside down", "Shell's openFront defaults to true, and with AlongZ the front face is the "
@@ -894,11 +896,20 @@ SUGGESTIONS_INTRO = (
     "important first."
 )
 SUGGESTIONS = [
-    ("Geometry is faceted, not exact",
-     "Holes, cylinders and fillets are written as flat facets, so CAD users can't measure a hole "
-     "diameter or pick a true cylindrical face, and files grow large: the full gallery is 6 MB. "
-     "Writing true analytic surfaces for the common cases (cylinders, holes, cones, planar circles) "
-     "would make the output proper CAD geometry. This is the biggest gap."),
+    ("Edge fillets and lofts are still faceted",
+     "Since 1.2 the STEP file has true cylinders, cones, spheres and tori. Still faceted:
+"
+     "- FilletEdges and ChamferEdges bands, and draft;
+"
+     "- Rectangle.WithFillet;
+"
+     "- lofts;
+"
+     "- ellipses;
+"
+     "- sharp-cornered sweeps.
+"
+     "They would need blended corner, ruled, elliptical-edge or B-spline faces."),
     ("No way to subtract one solid from another",
      "There are no boolean operations (union or subtract between shapes). Cuts and pockets cover "
      "plates and blocks, but hollow lofts, off-axis holes through revolved parts and notched "

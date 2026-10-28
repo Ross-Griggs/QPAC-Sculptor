@@ -279,18 +279,25 @@ namespace QPAC.Sculptor
                     ringIdx[k][l] = ringLoops[k][l].Select(p => Vertex(p, rings[k].T)).ToArray();
             }
 
-            void Walls(int[] a, int[] b)
+            // Rounded or drafted walls are offset copies of the profile, which keep circles only
+            // approximately, so only straight walls carry exact cylinders.
+            bool exact = rings.Count == 2 && rings[0].Inset == 0 && rings[1].Inset == 0;
+
+            void Walls(int[] a, int[] b, List<(double U, double V)> loop, double ta, double tb)
             {
+                int firstFace = solid.Faces.Count;
                 for (int i = 0; i < a.Length; i++)
                 {
                     int j = (i + 1) % a.Length;
                     solid.AddFace(new[] { a[i], a[j], b[j], b[i] });
                 }
+                if (exact)
+                    Arcs.TagPrism(solid, firstFace, loop, a, b, (p, t) => Vec.Frame(Origin, u, v, w, p.U, p.V, sign * t), w, ta, tb);
             }
 
             for (int k = 0; k < last; k++)
                 for (int l = 0; l < free.Count; l++)
-                    Walls(ringIdx[k][l], ringIdx[k + 1][l]);
+                    Walls(ringIdx[k][l], ringIdx[k + 1][l], ringLoops[k][l], rings[k].T, rings[k + 1].T);
 
             var frontHoles = new List<int[]>();
             var backHoles = new List<int[]>();
@@ -308,7 +315,7 @@ namespace QPAC.Sculptor
                 double t1 = backOf[c] >= 0 ? D - pockets[backOf[c]].Depth : D;
                 var start = cuts[c].Select(p => Vertex(p, t0)).ToArray();
                 var end = cuts[c].Select(p => Vertex(p, t1)).ToArray();
-                Walls(start, end);
+                Walls(start, end, cuts[c], t0, t1);
                 if (frontOf[c] >= 0) floorHoles[frontOf[c]].Add(start); else frontHoles.Add(start);
                 if (backOf[c] >= 0) floorHoles[backOf[c]].Add(end); else backHoles.Add(end);
             }
@@ -320,7 +327,7 @@ namespace QPAC.Sculptor
                 double tFloor = pk.FromBack ? D - pk.Depth : pk.Depth;
                 var top = pk.Loop.Select(q => Vertex(q, tCap)).ToArray();
                 var floor = pk.Loop.Select(q => Vertex(q, tFloor)).ToArray();
-                Walls(top, floor);
+                Walls(top, floor, pk.Loop, tCap, tFloor);
                 solid.AddFace(floor, floorHoles[p].ToArray());
                 (pk.FromBack ? backHoles : frontHoles).Add(top);
             }

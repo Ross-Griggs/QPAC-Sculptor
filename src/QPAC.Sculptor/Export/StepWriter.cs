@@ -6,8 +6,8 @@ using System.Text;
 
 namespace QPAC.Sculptor
 {
-    // Emits an AP214 exchange file: one PRODUCT per part, each holding faceted MANIFOLD_SOLID_BREPs,
-    // under a root assembly product.
+    // Emits an AP214 exchange file: one PRODUCT per part, each holding MANIFOLD_SOLID_BREPs (planes,
+    // cylinders, cones, spheres and tori bounded by lines and circles), under a root assembly product.
     internal sealed class StepWriter
     {
         private readonly StringBuilder data = new StringBuilder();
@@ -116,7 +116,7 @@ namespace QPAC.Sculptor
                             throw new InvalidOperationException(msg);
                         }
                     }
-                    int sid = WriteSolid(poly, shape.ShapeName);
+                    int sid = WriteSolid(poly, shape.ShapeName, options.ExactCurves);
                     solids.Add(sid);
                     var color = part.ColorOf(shape) ?? options.DefaultColor;
                     if (options.IncludeColors && color.HasValue) styled.Add((sid, color.Value));
@@ -209,57 +209,86 @@ namespace QPAC.Sculptor
             }
         }
 
-        private int WriteSolid(Polyhedron poly, string name)
+        private int Placement((double X, double Y, double Z) location, (double X, double Y, double Z) axis)
         {
-            var pointId = new Dictionary<int, int>();
+            int loc = Emit($"CARTESIAN_POINT('',{Pt(location)})");
+            return Emit($"AXIS2_PLACEMENT_3D('',#{loc},#{Direction(axis)},#{Direction(Vec.AnyPerpendicular(Vec.Normalize(axis)))})");
+        }
+
+        private int WriteSolid(Polyhedron poly, string name, bool exact)
+        {
             var vertexId = new Dictionary<int, int>();
             int Vertex(int v)
             {
                 if (vertexId.TryGetValue(v, out int known)) return known;
                 int cp = Emit($"CARTESIAN_POINT('',{Pt(poly.Vertices[v])})");
-                pointId[v] = cp;
                 return vertexId[v] = Emit($"VERTEX_POINT('',#{cp})");
             }
 
-            var edges = new Dictionary<(int, int), int>();
-            int Edge(int a, int b)
+            var circles = new Dictionary<Circle3D, int>();
+            var edgeId = new Dictionary<BEdge, int>();
+            int Edge(BEdge e)
             {
-                int lo = Math.Min(a, b), hi = Math.Max(a, b);
-                if (edges.TryGetValue((lo, hi), out int known)) return known;
-                int va = Vertex(lo), vb = Vertex(hi);
-                var d = Vec.Sub(poly.Vertices[hi], poly.Vertices[lo]);
-                int vec = Emit($"VECTOR('',#{Direction(d)},{Len(Vec.Length(d))})");
-                int line = Emit($"LINE('',#{pointId[lo]},#{vec})");
-                return edges[(lo, hi)] = Emit($"EDGE_CURVE('',#{va},#{vb},#{line},.T.)");
-            }
-
-            int Loop(int[] loop)
-            {
-                var oriented = new List<int>(loop.Length);
-                for (int k = 0; k < loop.Length; k++)
+                if (edgeId.TryGetValue(e, out int known)) return known;
+                int va = Vertex(e.Start), vb = Vertex(e.End);
+                if (e.Circle == null)
                 {
-                    int a = loop[k], b = loop[(k + 1) % loop.Length];
-                    int ec = Edge(a, b);
-                    oriented.Add(Emit($"ORIENTED_EDGE('',*,*,#{ec},.{(a < b ? "T" : "F")}.)"));
+                    var p = poly.Vertices[e.Start];
+                    var d = Vec.Sub(poly.Vertices[e.End], p);
+                    int cp = Emit($"CARTESIAN_POINT('',{Pt(p)})");
+                    int vec = Emit($"VECTOR('',#{Direction(d)},{Len(Vec.Length(d))})");
+                    int line = Emit($"LINE('',#{cp},#{vec})");
+                    return edgeId[e] = Emit($"EDGE_CURVE('',#{va},#{vb},#{line},.T.)");
                 }
-                return Emit($"EDGE_LOOP('',({string.Join(",", oriented.Select(x => "#" + x))}))");
+                var c = e.Circle;
+                if (!circles.TryGetValue(c, out int circle))
+                {
+                    int loc = Emit($"CARTESIAN_POINT('',{Pt(c.Center)})");
+                    int ax = Emit($"AXIS2_PLACEMENT_3D('',#{loc},#{Direction(c.Normal)},#{Direction(c.RefDirection)})");
+                    circles[c] = circle = Emit($"CIRCLE('',#{ax},{Len(c.Radius)})");
+                }
+                return edgeId[e] = Emit($"EDGE_CURVE('',#{va},#{vb},#{circle},.{(e.CircleSense ? "T" : "F")}.)");
             }
 
-            var faces = new List<int>(poly.Faces.Count);
-            foreach (var f in poly.Faces)
+            int Surface(BFace f)
             {
-                var bounds = new List<int> { Emit($"FACE_OUTER_BOUND('',#{Loop(f.Outer)},.T.)") };
-                foreach (var h in f.Holes) bounds.Add(Emit($"FACE_BOUND('',#{Loop(h)},.T.)"));
+                switch (f.Surface)
+                {
+                    case CylinderSurface cyl:
+                        return Emit($"CYLINDRICAL_SURFACE('',#{Placement(cyl.Point, cyl.Axis)},{Len(cyl.Radius)})");
+                    case ConeSurface cone:
+                    {
+                        // STEP places a cone by a circle on it, not its apex: use the face's widest point.
+                        double h = f.Loops.SelectMany(l => l).SelectMany(ce => new[] { ce.Edge.Start, ce.Edge.End })
+                            .Max(v => Vec.Dot(Vec.Sub(poly.Vertices[v], cone.Apex), cone.Axis));
+                        var at = Vec.Add(cone.Apex, Vec.Scale(cone.Axis, h));
+                        return Emit($"CONICAL_SURFACE('',#{Placement(at, cone.Axis)},{Len(h * Math.Tan(cone.SemiAngle))},{F(cone.SemiAngle)})");
+                    }
+                    case SphereSurface sph:
+                        return Emit($"SPHERICAL_SURFACE('',#{Placement(sph.Center, (0, 0, 1))},{Len(sph.Radius)})");
+                    case TorusSurface tor:
+                        return Emit($"TOROIDAL_SURFACE('',#{Placement(tor.Center, tor.Axis)},{Len(tor.MajorRadius)},{Len(tor.MinorRadius)})");
+                    default:
+                        int cp = Emit($"CARTESIAN_POINT('',{Pt(f.PlanePoint)})");
+                        var n = f.PlaneNormal;
+                        int ax = Emit($"AXIS2_PLACEMENT_3D('',#{cp},#{Direction(n)},#{Direction(Vec.AnyPerpendicular(n))})");
+                        return Emit($"PLANE('',#{ax})");
+                }
+            }
 
-                var n = poly.FaceNormal(f);
-                var p0 = poly.Vertices[f.Outer[0]];
-                var e = Vec.Sub(poly.Vertices[f.Outer[1]], p0);
-                var r = Vec.Normalize(Vec.Sub(e, Vec.Scale(n, Vec.Dot(e, n))));
-                if (r == (0, 0, 0)) r = Vec.AnyPerpendicular(n);
-                Vertex(f.Outer[0]);
-                int ax = Emit($"AXIS2_PLACEMENT_3D('',#{pointId[f.Outer[0]]},#{Direction(n)},#{Direction(r)})");
-                int pl = Emit($"PLANE('',#{ax})");
-                faces.Add(Emit($"ADVANCED_FACE('',({string.Join(",", bounds.Select(x => "#" + x))}),#{pl},.T.)"));
+            var faces = new List<int>();
+            foreach (var f in BRep.Build(poly, exact))
+            {
+                var bounds = new List<int>();
+                for (int i = 0; i < f.Loops.Count; i++)
+                {
+                    var oriented = f.Loops[i].Select(ce => Emit($"ORIENTED_EDGE('',*,*,#{Edge(ce.Edge)},.{(ce.Forward ? "T" : "F")}.)")).ToList();
+                    int loop = Emit($"EDGE_LOOP('',({string.Join(",", oriented.Select(x => "#" + x))}))");
+                    bool outer = i == 0 && f.HasOuterLoop;
+                    bounds.Add(Emit($"{(outer ? "FACE_OUTER_BOUND" : "FACE_BOUND")}('',#{loop},.T.)"));
+                }
+                int surface = Surface(f);
+                faces.Add(Emit($"ADVANCED_FACE('',({string.Join(",", bounds.Select(x => "#" + x))}),#{surface},.{(f.SameSense ? "T" : "F")}.)"));
             }
 
             int shell = Emit($"CLOSED_SHELL('',({string.Join(",", faces.Select(x => "#" + x))}))");

@@ -11,6 +11,12 @@ namespace QPAC.Sculptor
         /// <summary>Write part/shape colours as STEP surface styles.</summary>
         public bool IncludeColors = true;
 
+        /// <summary>
+        /// Write round geometry as exact cylinders, cones, spheres, tori and circular edges. False writes
+        /// every face as a flat facet, as releases before 1.2 did.
+        /// </summary>
+        public bool ExactCurves = true;
+
         /// <summary>Colour for shapes whose part and shape both leave it unset (null = leave uncoloured).</summary>
         public StepColor? DefaultColor;
 

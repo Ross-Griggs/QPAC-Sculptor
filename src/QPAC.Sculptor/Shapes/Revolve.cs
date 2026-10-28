@@ -101,7 +101,75 @@ namespace QPAC.Sculptor
                 solid.AddFace(Enumerable.Range(0, profile.Count).Select(i => idx[i, 0]).ToArray());
                 solid.AddFace(Enumerable.Range(0, profile.Count).Select(i => idx[i, n]).ToArray());
             }
+            TagSurfaces(solid, idx, profile, origin, u, v, w, a0, da, n, full);
             return solid;
+        }
+
+        // Profile edge i swept around the axis made faces i*n … i*n+n−1. Each straight profile edge sweeps
+        // a plane, cylinder or cone and each profile arc a sphere or torus. A full turn is split into two
+        // halves so that no face or circle closes on itself.
+        private static void TagSurfaces(
+            Polyhedron solid, int[,] idx, List<(double R, double Z)> profile,
+            (double X, double Y, double Z) origin, (double X, double Y, double Z) u, (double X, double Y, double Z) v, (double X, double Y, double Z) w,
+            double a0, double da, int n, bool full)
+        {
+            int m = profile.Count;
+            double size = Math.Max(1e-9, profile.Max(p => Math.Max(Math.Abs(p.R), Math.Abs(p.Z))));
+            double tol = 1e-9 * Math.Max(1, size);
+            (double X, double Y, double Z) OnAxis(double z) => Vec.Add(origin, Vec.Scale(w, z));
+            (double X, double Y, double Z) Dir(int j) => Vec.Add(Vec.Scale(u, Math.Cos(a0 + da * j)), Vec.Scale(v, Math.Sin(a0 + da * j)));
+
+            var group = Enumerable.Range(0, m).ToArray();
+            var arcOf = new Arc2D?[m];
+            foreach (var arc in Arcs.Find(profile.Select(p => (U: p.R, V: p.Z)).ToList(), closed: true))
+                for (int e = 0; e < arc.Segments; e++)
+                {
+                    int i = (arc.Start + e) % m;
+                    group[i] = arc.Start;
+                    arcOf[i] = arc;
+                }
+
+            AnalyticSurface SurfaceFor(int i) => arcOf[i] is Arc2D arc
+                ? Arcs.RevolvedArc((arc.Center.U, arc.Center.V), arc.Radius, origin, w, tol)
+                : Arcs.Revolved(profile[i], profile[(i + 1) % m], origin, w, tol);
+
+            int[] splits = full ? new[] { 0, n / 2, n } : new[] { 0, n };
+            for (int i = 0; i < m; i++)
+            {
+                if (group[i] != i && arcOf[i] != null) continue;
+                var members = Enumerable.Range(0, m).Where(k => group[k] == group[i]).ToList();
+                for (int h = 0; h + 1 < splits.Length; h++)
+                {
+                    var surface = SurfaceFor(i);
+                    if (surface == null) continue;
+                    foreach (int k in members)
+                        for (int j = splits[h]; j < splits[h + 1]; j++)
+                            solid.Faces[k * n + j].Surface = surface;
+                }
+            }
+
+            int columns = idx.GetLength(1);
+            int[] Column(int i, int j0, int j1) => Enumerable.Range(j0, j1 - j0 + 1).Select(j => idx[i, j % columns]).ToArray();
+
+            // Circles traced by profile vertices where one surface ends and the next begins.
+            for (int i = 0; i < m; i++)
+            {
+                int before = (i - 1 + m) % m;
+                if (group[before] == group[i] || profile[i].R <= tol) continue;
+                var circle = new Circle3D(OnAxis(profile[i].Z), w, profile[i].R);
+                for (int h = 0; h + 1 < splits.Length; h++)
+                    solid.Curves.Add(new CurveRun(Column(i, splits[h], splits[h + 1]), circle));
+            }
+
+            // Profile arcs on the seams between halves and on the end faces of a partial revolve.
+            foreach (int j in splits.Distinct().Where(j => full ? j < n : true))
+                foreach (var arc in arcOf.Where(a => a.HasValue).Select(a => a.Value).Distinct())
+                {
+                    var dir = Dir(j);
+                    var center = Vec.Add(OnAxis(arc.Center.V), Vec.Scale(dir, arc.Center.U));
+                    var chain = Enumerable.Range(0, arc.Segments + 1).Select(e => idx[(arc.Start + e) % m, j]).ToArray();
+                    solid.Curves.Add(new CurveRun(chain, new Circle3D(center, Vec.Cross(w, dir), arc.Radius)));
+                }
         }
     }
 
